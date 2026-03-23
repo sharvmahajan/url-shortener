@@ -83,7 +83,9 @@ curl -X POST "http://localhost:8000/shorten?long_url=https://example.com/very/lo
 **Response:**
 ```json
 {
-  "short_url": "http://localhost:8000/abc123"
+  "short_code": "abc123",
+  "short_url": "http://localhost:8000/abc123",
+  "qr_url": "http://localhost:8000/qr/abc123"
 }
 ```
 
@@ -104,9 +106,17 @@ Redirect to the original URL.
 curl -L "http://localhost:8000/abc123"
 ```
 
-**Response:**
-- Redirects to the original long URL (HTTP 307)
-- Returns 404 if the code is not found
+**Response (Success - HTTP 307):**
+```
+Location: https://example.com/very/long/url/path
+```
+
+**Response (Not Found - HTTP 404):**
+```json
+{
+  "detail": "URL not found"
+}
+```
 
 **Parameters:**
 - `code` (string, path parameter): The short code
@@ -120,9 +130,18 @@ Generate and retrieve a QR code for a shortened URL.
 curl "http://localhost:8000/qr/abc123" --output qr.png
 ```
 
-**Response:**
-- Returns a PNG image of the QR code encoding the short URL
-- Returns 404 if the code is not found
+**Response (Success - HTTP 200):**
+```
+Content-Type: image/png
+[Binary PNG image data]
+```
+
+**Response (Not Found - HTTP 404):**
+```json
+{
+  "detail": "URL not found"
+}
+```
 
 **Parameters:**
 - `code` (string, path parameter): The short code
