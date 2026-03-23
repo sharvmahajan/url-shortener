@@ -152,10 +152,12 @@ Content-Type: image/png
 ## How It Works
 
 1. **URL Shortening Flow**:
-   - A counter is incremented in MongoDB for each new URL
+   - First, the system checks if the long URL has already been shortened (reverse cache lookup using URL hash)
+   - If found, it returns the existing short code immediately
+   - If not found, a counter is incremented in MongoDB for each new URL
    - The counter value is encoded using base62 encoding to generate a short code
    - The mapping (short code → long URL) is stored in MongoDB
-   - The URL is cached in Redis with a 1-hour TTL
+   - Both the URL and reverse URL-to-code mapping are cached in Redis with a 1-hour TTL
 
 2. **Redirect Flow**:
    - First, the system checks Redis cache for a cache hit
