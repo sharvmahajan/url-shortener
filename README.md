@@ -5,6 +5,7 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 ## Features
 
 - **URL Shortening**: Convert long URLs to compact short codes using base62 encoding
+- **QR Code Generation**: Generate QR codes for shortened URLs for easy sharing
 - **Redis Caching**: Cache frequently accessed URLs for faster redirects (1-hour TTL)
 - **MongoDB Storage**: Persistent storage of shortened URLs with creation timestamps
 - **Counter-based Encoding**: Sequential counter-based approach ensures unique short codes
@@ -17,6 +18,7 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 - **Cache**: [Upstash Redis](https://upstash.com/) - Serverless Redis
 - **Driver**: [Motor](https://motor.readthedocs.io/) - Async MongoDB driver
 - **Server**: [Uvicorn](https://www.uvicorn.org/) - ASGI web server
+- **QR Code**: [QRCode](https://github.com/lincolnloop/python-qrcode) - QR code generation
 - **Environment**: [Python Dotenv](https://github.com/theskumar/python-dotenv) - Environment variable management
 
 ## Prerequisites
@@ -88,6 +90,11 @@ curl -X POST "http://localhost:8000/shorten?long_url=https://example.com/very/lo
 **Parameters:**
 - `long_url` (string, required): The original URL to shorten
 
+**Response Fields:**
+- `short_code`: The generated short code
+- `short_url`: Full URL to access the shortened link
+- `qr_url`: URL to access the QR code for the shortened link
+
 ### GET /{code}
 
 Redirect to the original URL.
@@ -98,11 +105,30 @@ curl -L "http://localhost:8000/abc123"
 ```
 
 **Response:**
-- Redirects to the original long URL
+- Redirects to the original long URL (HTTP 307)
 - Returns 404 if the code is not found
 
 **Parameters:**
 - `code` (string, path parameter): The short code
+
+### GET /qr/{code}
+
+Generate and retrieve a QR code for a shortened URL.
+
+**Request:**
+```bash
+curl "http://localhost:8000/qr/abc123" --output qr.png
+```
+
+**Response:**
+- Returns a PNG image of the QR code encoding the short URL
+- Returns 404 if the code is not found
+
+**Parameters:**
+- `code` (string, path parameter): The short code
+
+**Content Type:**
+- `image/png`: The response is a PNG image
 
 ## How It Works
 
@@ -135,6 +161,9 @@ url-shortener/
 │   ├── base62.py         # Base62 encoding utility
 │   ├── cache.py          # Redis client configuration
 │   ├── database.py       # MongoDB client and collections
+│   ├── qr.py             # QR code generation utility
+│   ├── schemas.py        # Pydantic request/response models
+│   ├── utils.py          # Utility functions (URL hashing)
 │   └── __pycache__/
 ├── .env.example          # Environment variables template
 ├── .gitignore            # Git ignore rules
@@ -162,7 +191,8 @@ url-shortener/
 - Analytics (click tracking, statistics)
 - Rate limiting
 - Admin dashboard
-- QR code generation
+- Batch URL shortening
+- API authentication and usage quotas
 
 ## Contributing
 
