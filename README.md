@@ -6,8 +6,10 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 
 - **URL Shortening**: Convert long URLs to compact short codes using base62 encoding
 - **QR Code Generation**: Generate QR codes for shortened URLs for easy sharing
-- **Redis Caching**: Cache frequently accessed URLs for faster redirects (1-hour TTL)
-- **MongoDB Storage**: Persistent storage of shortened URLs with creation timestamps
+- **URL Expiration (TTL)**: Set custom expiration times for shortened URLs (minutes, hours, days, months)
+- **Expiration Handling**: Automatic cleanup of expired URLs with HTTP 410 responses
+- **Redis Caching**: Cache frequently accessed URLs for faster redirects with dynamic TTL
+- **MongoDB Storage**: Persistent storage of shortened URLs with creation timestamps and expiration dates
 - **Counter-based Encoding**: Sequential counter-based approach ensures unique short codes
 - **RESTful API**: Simple and intuitive API endpoints
 
@@ -73,11 +75,20 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 
 ### POST /shorten
 
-Shorten a long URL.
+Shorten a long URL with optional expiration settings.
 
 **Request:**
 ```bash
-curl -X POST "http://localhost:8000/shorten?long_url=https://example.com/very/long/url/path"
+curl -X POST "http://localhost:8000/shorten" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/very/long/url/path"}'
+```
+
+With expiration (30 minutes):
+```bash
+curl -X POST "http://localhost:8000/shorten" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/very/long/url/path", "ttl_value": 30, "ttl_unit": "minutes"}'
 ```
 
 **Response:**
@@ -89,13 +100,19 @@ curl -X POST "http://localhost:8000/shorten?long_url=https://example.com/very/lo
 }
 ```
 
-**Parameters:**
-- `long_url` (string, required): The original URL to shorten
+**Request Parameters:**
+- `url` (string, required): The original URL to shorten
+- `ttl_value` (integer, optional): The TTL value (number of time units)
+- `ttl_unit` (string, optional): The TTL unit - one of `minutes`, `hours`, `days`, `months`
 
 **Response Fields:**
 - `short_code`: The generated short code
 - `short_url`: Full URL to access the shortened link
 - `qr_url`: URL to access the QR code for the shortened link
+
+**Notes:**
+- If no TTL is specified, the URL will never expire
+- Expired URLs return HTTP 410 (Gone) status
 
 ### GET /{code}
 
@@ -156,22 +173,33 @@ Content-Type: image/png
    - If found, it returns the existing short code immediately
    - If not found, a counter is incremented in MongoDB for each new URL
    - The counter value is encoded using base62 encoding to generate a short code
-   - The mapping (short code → long URL) is stored in MongoDB
-   - Both the URL and reverse URL-to-code mapping are cached in Redis with a 1-hour TTL
+   - An optional expiration time is calculated based on provided TTL parameters
+   - The mapping (short code → long URL) is stored in MongoDB with optional expiration timestamp
+   - Both the URL and reverse URL-to-code mapping are cached in Redis with a dynamic TTL
 
 2. **Redirect Flow**:
    - First, the system checks Redis cache for a cache hit
-   - If found, it redirects immediately (faster response)
+   - Expiration is validated if the URL has an expiration timestamp
+   - If URL is expired, returns HTTP 410 (Gone)
+   - If found and valid, it redirects immediately (faster response)
    - If not found (cache miss), it queries MongoDB
-   - The URL is then cached in Redis for future requests
+   - Expiration is checked again before redirecting
+   - The URL is then cached in Redis for future requests with a dynamic TTL
    - User is redirected to the original URL
 
-3. **Cache-Aside Architecture**:
+3. **Expiration Handling**:
+   - URLs can have optional expiration times set at creation (minutes, hours, days, months)
+   - Both cache and database check expiration before serving the URL
+   - Expired URLs return HTTP 410 (Gone) status
+   - Redis TTL is dynamically calculated as the minimum of (remaining time to expiration, 1 hour)
+   - This prevents expired URLs from being served even if they remain in Redis
+
+4. **Cache-Aside Architecture**:
    - This application implements the **Cache-Aside (Lazy Loading)** pattern
    - On each request, the application checks the cache first before querying the database
    - Cache misses trigger a database query, and the result is populated back into the cache
    - This approach reduces database load and improves response times for frequently accessed URLs
-   - Redis entries have a 1-hour TTL to balance freshness and performance
+   - Redis TTL is dynamically adjusted based on remaining time to expiration
 
 ## Project Structure
 
@@ -203,6 +231,7 @@ url-shortener/
 ## Error Handling
 
 - **404 Not Found**: Returned when a short code doesn't exist
+- **410 Gone**: Returned when a requested URL has expired
 - **500 Internal Server Error**: Returned for database or cache connection issues
 
 ## Future Enhancements
