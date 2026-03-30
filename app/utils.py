@@ -9,7 +9,7 @@ def compute_expiry(value, unit):
         return None
 
     now = datetime.now(timezone.utc)
-
+    unit = unit.lower()
     if unit == "minutes":
         return now + timedelta(minutes=value)
     if unit == "hours":
