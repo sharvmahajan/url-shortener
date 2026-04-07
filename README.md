@@ -2,6 +2,7 @@
 
 A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redis. This application provides a simple API to shorten long URLs and redirect to the original URLs with built-in caching for optimal performance.
 
+
 ## Features
 
 - **URL Shortening**: Convert long URLs to compact short codes using base62 encoding
@@ -11,6 +12,9 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 - **Redis Caching**: Cache frequently accessed URLs for faster redirects with dynamic TTL
 - **MongoDB Storage**: Persistent storage of shortened URLs with creation timestamps and expiration dates
 - **Counter-based Encoding**: Sequential counter-based approach ensures unique short codes
+- **Analytics Tracking**: Track the number of times each short URL is accessed (clicks)
+- **Analytics Endpoint**: Retrieve click statistics and metadata for each short URL
+- **Background Analytics Worker**: Asynchronous worker processes analytics events from Redis stream
 - **RESTful API**: Simple and intuitive API endpoints
 
 ## Tech Stack
@@ -71,7 +75,42 @@ A fast and efficient URL shortener service built with FastAPI, MongoDB, and Redi
 
    The API will be available at `http://localhost:8000`
 
+
+## Running the Analytics Worker
+
+The analytics worker tracks click statistics for each short URL. It listens to a Redis stream and updates the click count in MongoDB asynchronously.
+
+**To start the analytics worker:**
+```bash
+uv run python -m app.analytics_worker
+```
+
+This process should be run in a separate terminal alongside the main FastAPI server.
+
 ## API Endpoints
+### GET /analytics/{code}
+
+Retrieve analytics and metadata for a short URL.
+
+**Request:**
+```bash
+curl "http://localhost:8000/analytics/abc123"
+```
+
+**Response (Success - HTTP 200):**
+```json
+{
+   "short_code": "abc123",
+   "long_url": "https://example.com/very/long/url/path",
+   "created_at": "2024-04-07T12:34:56.789Z",
+   "expire_at": "2024-05-07T12:34:56.789Z",
+   "clicks": 42
+}
+```
+
+**Parameters:**
+- `code` (string, path parameter): The short code
+
 
 ### POST /shorten
 
@@ -166,6 +205,7 @@ Content-Type: image/png
 **Content Type:**
 - `image/png`: The response is a PNG image
 
+
 ## How It Works
 
 1. **URL Shortening Flow**:
@@ -177,11 +217,12 @@ Content-Type: image/png
    - The mapping (short code → long URL) is stored in MongoDB with optional expiration timestamp
    - Both the URL and reverse URL-to-code mapping are cached in Redis with a dynamic TTL
 
-2. **Redirect Flow**:
+2. **Redirect & Analytics Flow**:
    - First, the system checks Redis cache for a cache hit
    - Expiration is validated if the URL has an expiration timestamp
    - If URL is expired, returns HTTP 410 (Gone)
    - If found and valid, it redirects immediately (faster response)
+   - On every redirect, an analytics event is pushed to a Redis stream for asynchronous processing
    - If not found (cache miss), it queries MongoDB
    - Expiration is checked again before redirecting
    - The URL is then cached in Redis for future requests with a dynamic TTL
@@ -237,8 +278,7 @@ url-shortener/
 ## Future Enhancements
 
 - Custom short codes support
-- URL expiration and cleaning
-- Analytics (click tracking, statistics)
+- Advanced analytics (geolocation, referrer, device)
 - Rate limiting
 - Admin dashboard
 - Batch URL shortening
