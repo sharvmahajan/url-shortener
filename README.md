@@ -245,21 +245,22 @@ Content-Type: image/png
 ## Project Structure
 
 ```
-url-shortener/
+url-shortner/
 ├── app/
-│   ├── main.py           # FastAPI application and endpoints
-│   ├── base62.py         # Base62 encoding utility
-│   ├── cache.py          # Redis client configuration
-│   ├── database.py       # MongoDB client and collections
-│   ├── qr.py             # QR code generation utility
-│   ├── schemas.py        # Pydantic request/response models
-│   ├── utils.py          # Utility functions (URL hashing)
-│   └── __pycache__/
-├── .env.example          # Environment variables template
-├── .gitignore            # Git ignore rules
-├── pyproject.toml        # Project metadata and dependencies
-├── uv.lock               # Dependency lock file
-└── README.md             # This file
+│   ├── __init__.py            # Package marker
+│   ├── analytics_worker.py    # Background analytics worker
+│   ├── base62.py              # Base62 encoding utility
+│   ├── cache.py               # Redis client configuration
+│   ├── database.py            # MongoDB client and collections
+│   ├── main.py                # FastAPI application and endpoints
+│   ├── qr.py                  # QR code generation utility
+│   ├── schemas.py             # Pydantic request/response models
+│   └── utils.py               # Utility functions (URL hashing)
+├── .env.example               # Environment variables template
+├── .gitignore                 # Git ignore rules
+├── pyproject.toml             # Project metadata and dependencies
+├── uv.lock                    # Dependency lock file
+└── README.md                  # This file
 ```
 
 ## Performance Considerations
