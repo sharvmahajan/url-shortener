@@ -16,13 +16,21 @@ app = FastAPI()
 
 @app.post("/shorten")
 async def shorten(req: ShortenRequest):
-
     long_url = req.url
-
     url_hash = hash_url(long_url)
+    now = datetime.now(timezone.utc)
+
+    try:
+        expire_at = compute_expiry(req.ttl_value, req.ttl_unit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    expire_at = ensure_utc(expire_at)
+
+    if expire_at and expire_at <= now:
+        raise HTTPException(status_code=410, detail="URL expired")
 
     cached_code = redis_client.get(f"long:{url_hash}")
-
     if cached_code:
         return {
             "short_code": cached_code,
@@ -39,12 +47,11 @@ async def shorten(req: ShortenRequest):
 
     short_code = encode(doc["value"])
 
-    expire_at = compute_expiry(req.ttl_value, req.ttl_unit)
-
     url_doc = {
         "_id": short_code,
         "long_url": long_url,
-        "created_at": datetime.now(timezone.utc)
+        "created_at": now,
+        "clicks": 0
     }
 
     if expire_at:
@@ -54,21 +61,25 @@ async def shorten(req: ShortenRequest):
         await urls_collection.insert_one(url_doc)
 
     except DuplicateKeyError:
-        # another request inserted the same long_url
         existing = await urls_collection.find_one({"long_url": long_url})
+
+        if not existing:
+            raise HTTPException(status_code=500, detail="Existing URL not found")
+
+        existing_expire_at = ensure_utc(existing.get("expire_at"))
+
+        if existing_expire_at and existing_expire_at <= now:
+            raise HTTPException(status_code=410, detail="URL expired")
+
         short_code = existing["_id"]
-        expire_at = existing.get("expire_at")
+        expire_at = existing_expire_at
 
-    # compute remaining TTL once
     if expire_at:
-        expire_at = ensure_utc(expire_at)
-
-        remaining = int((expire_at - datetime.now(timezone.utc)).total_seconds())
+        remaining = int((expire_at - now).total_seconds())
 
         if remaining <= 0:
             raise HTTPException(status_code=410, detail="URL expired")
 
-        # cache warming
         ttl = min(3600, remaining)
     else:
         ttl = 3600
@@ -159,6 +170,13 @@ async def redirect(code: str):
                 raise HTTPException(status_code=410, detail="URL expired")
 
         print("Cache Hit :)")
+        redis_client.xadd(
+            "analytics_stream",
+            {
+                "code": code,
+                "ts": datetime.now(timezone.utc).isoformat()
+            }
+        )
         return RedirectResponse(data["long_url"])
     print("Cache Miss :(")
 
@@ -188,4 +206,29 @@ async def redirect(code: str):
 
     redis_client.setex(f"url:{code}", ttl, payload)
 
+    redis_client.xadd(
+        "analytics_stream",
+        {
+            "code": code,
+            "ts": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+
     return RedirectResponse(doc["long_url"])
+
+@app.get("/analytics/{code}")
+async def analytics(code: str):
+
+    doc = await urls_collection.find_one({"_id": code})
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="URL not found")
+
+    return {
+        "short_code": code,
+        "long_url": doc["long_url"],
+        "created_at": doc["created_at"],
+        "expire_at": doc.get("expire_at"),
+        "clicks": doc.get("clicks", 0)
+    }
